@@ -1,0 +1,73 @@
+name: Check Xray Core Updates
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Каждый понедельник в 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check-update:
+    name: Check for Xray Updates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get latest Xray version
+        id: xray-version
+        run: |
+          LATEST=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | jq -r '.tag_name')
+          echo "version=$LATEST" >> $GITHUB_OUTPUT
+          echo "Latest Xray version: $LATEST"
+
+      - name: Get current pinned version
+        id: current-version
+        run: |
+          CURRENT=$(cat backend/internal/core/xray_version.txt 2>/dev/null || echo "v0.0.0")
+          echo "version=$CURRENT" >> $GITHUB_OUTPUT
+          echo "Current pinned version: $CURRENT"
+
+      - name: Check if update needed
+        id: check
+        run: |
+          if [ "${{ steps.xray-version.outputs.version }}" != "${{ steps.current-version.outputs.version }}" ]; then
+            echo "needed=true" >> $GITHUB_OUTPUT
+            echo "Update needed!"
+          else
+            echo "needed=false" >> $GITHUB_OUTPUT
+            echo "Already up to date"
+          fi
+
+      - name: Create update PR
+        if: steps.check.outputs.needed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update Xray core to ${{ steps.xray-version.outputs.version }}"
+          title: "🔄 Update Xray core to ${{ steps.xray-version.outputs.version }}"
+          body: |
+            ## Автоматическое обновление ядра Xray
+            
+            Новая версия: **${{ steps.xray-version.outputs.version }}**
+            Текущая версия: **${{ steps.current-version.outputs.version }}**
+            
+            [Changelog](https://github.com/XTLS/Xray-core/releases/tag/${{ steps.xray-version.outputs.version }})
+            
+            Этот PR обновляет пиннинг версии ядра. После мёрджа будет создан новый релиз панели.
+          branch: "auto-update/xray-${{ steps.xray-version.outputs.version }}"
+          base: main
+          labels: |
+            automated
+            dependencies
+
+      - name: Notify if update available
+        if: steps.check.outputs.needed == 'true'
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+             Доступна новая версия Xray core: ${{ steps.xray-version.outputs.version }}
+            
+            Создан PR для обновления.
