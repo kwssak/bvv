@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Xray Updater Weekly
+
+[Timer]
+# Запуск каждый понедельник в 04:00 ночи
+OnCalendar=Mon *-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target
