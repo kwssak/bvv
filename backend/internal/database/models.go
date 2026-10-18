@@ -2,15 +2,15 @@ package database
 
 import (
 	"time"
-	"github.com/google/uuid"
 )
 
-// Client представляет пользователя. Email скрыт из публичных API ответов.
+// Client представляет пользователя. 
+// Email скрыт из публичных API ответов благодаря тегу json:"-"
 type Client struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
 	Name         string    `gorm:"not null" json:"name"`
-	Email        string    `gorm:"-" json:"-"` // "-" скрывает это поле из JSON ответов API (конфигуратора)
-	SubPath      string    `gorm:"uniqueIndex;not null" json:"sub_path"` // Уникальный путь, например: awewe/emsjjxgshkp-gpsh119
+	Email        string    `gorm:"-" json:"-"` // Скрыто из JSON-ответов конфигуратора
+	SubPath      string    `gorm:"uniqueIndex;not null" json:"sub_path"` // Уникальный путь: awewe/рандомная-строка
 	Protocol     string    `json:"protocol"`
 	TrafficLimit int64     `json:"traffic_limit"` // в байтах
 	TrafficUsed  int64     `json:"traffic_used"`
@@ -21,19 +21,7 @@ type Client struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-// BotSettings хранит настройки телеграм бота, включая JSON-инструкции
-type BotSettings struct {
-	ID              uint   `gorm:"primaryKey"`
-	Token           string `json:"token"`
-	AdminChatID     string `json:"admin_chat_id"`
-	PlategaAPIKey   string `json:"platega_api_key"`
-	CryptoBotAPI    string `json:"crypto_bot_api"`
-	ExpireNotifyDays int   `json:"expire_notify_days"`
-	// CustomInstructions хранит JSON с логикой ответов бота
-	CustomInstructions string `gorm:"type:text" json:"custom_instructions"` 
-}
-
-// Node представляет ноду (inbound)
+// Node представляет ноду (inbound) для ядра Xray
 type Node struct {
 	ID             uint   `gorm:"primaryKey" json:"id"`
 	Name           string `json:"name"`
@@ -42,6 +30,26 @@ type Node struct {
 	Transport      string `json:"transport"`
 	Security       string `json:"security"`
 	SNI            string `json:"sni"`
-	TrafficRules   string `gorm:"type:text" json:"traffic_rules"` // JSON массив разрешенных доменов
+	TrafficRules   string `gorm:"type:text" json:"traffic_rules"` // JSON-массив разрешенных доменов для контроля трафика
 	IsCDN          bool   `gorm:"default:false" json:"is_cdn"`
+}
+
+// BotSettings хранит настройки телеграм бота, включая JSON-инструкции
+type BotSettings struct {
+	ID                 uint   `gorm:"primaryKey"`
+	Token              string `json:"token"`
+	AdminChatID        string `json:"admin_chat_id"`
+	PlategaAPIKey      string `json:"platega_api_key"`
+	CryptoBotAPI       string `json:"crypto_bot_api"`
+	ExpireNotifyDays   int    `json:"expire_notify_days"`
+	CustomInstructions string `gorm:"type:text" json:"custom_instructions"` // JSON с логикой ответов и кнопками
+}
+
+// LegalSettings хранит тексты для страниц ПК (Пользовательское соглашение) и ПС (Политика конфиденциальности)
+type LegalSettings struct {
+	ID      uint   `gorm:"primaryKey"`
+	PCTitle string `json:"pc_title"`                    // Заголовок ПК
+	PCText  string `gorm:"type:text" json:"pc_text"`    // Текст ПК (поддерживает переносы строк)
+	PSTitle string `json:"ps_title"`                    // Заголовок ПС
+	PSText  string `gorm:"type:text" json:"ps_text"`    // Текст ПС
 }
