@@ -1,0 +1,212 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+env:
+  GO_VERSION: '1.22'
+  NODE_VERSION: '20'
+
+jobs:
+  build-backend:
+    name: Build Backend (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: linux
+            goarch: arm
+            goarm: 7
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: go mod download
+
+      - name: Build binary
+        working-directory: ./backend
+        env:
+          CGO_ENABLED: 1
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: |
+          mkdir -p bin
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          VERSION=${GITHUB_REF_NAME:-${{ github.event.inputs.version }}}
+          go build -ldflags="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" \
+            -o bin/awewe-panel-${{ matrix.goos }}-${{ matrix.goarch }} \
+            ./cmd/server/main.go
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: backend/bin/awewe-panel-${{ matrix.goos }}-${{ matrix.goarch }}
+          retention-days: 1
+
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build production bundle
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: [build-backend, build-frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Prepare release packages
+        run: |
+          VERSION=${GITHUB_REF_NAME:-${{ github.event.inputs.version }}}
+          
+          # Создаём структуру для каждой архитектуры
+          for ARCH_DIR in artifacts/backend-*; do
+            ARCH_NAME=$(basename $ARCH_DIR | sed 's/backend-//')
+            PACKAGE_DIR="awewe-panel-$VERSION-$ARCH_NAME"
+            
+            mkdir -p "$PACKAGE_DIR"
+            
+            # Копируем бинарник
+            cp "$ARCH_DIR/awewe-panel-"* "$PACKAGE_DIR/awewe-panel"
+            chmod +x "$PACKAGE_DIR/awewe-panel"
+            
+            # Копируем скрипты
+            cp -r scripts "$PACKAGE_DIR/"
+            cp -r systemd "$PACKAGE_DIR/"
+            
+            # Копируем фронтенд
+            mkdir -p "$PACKAGE_DIR/frontend"
+            cp -r artifacts/frontend-dist/* "$PACKAGE_DIR/frontend/"
+            
+            # Документация
+            cp README.md "$PACKAGE_DIR/" 2>/dev/null || true
+            cp LICENSE "$PACKAGE_DIR/" 2>/dev/null || true
+            
+            # Создаём архив
+            tar -czf "$PACKAGE_DIR.tar.gz" "$PACKAGE_DIR"
+            
+            echo "Created: $PACKAGE_DIR.tar.gz"
+          done
+          
+          # Создаём архив только с фронтендом (для ручного деплоя)
+          mkdir -p "awewe-panel-$VERSION-frontend-only"
+          cp -r artifacts/frontend-dist/* "awewe-panel-$VERSION-frontend-only/"
+          tar -czf "awewe-panel-$VERSION-frontend-only.tar.gz" "awewe-panel-$VERSION-frontend-only"
+
+      - name: Generate checksums
+        run: |
+          sha256sum *.tar.gz > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.tar.gz
+            checksums.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          body: |
+            ## Awewe Panel ${{ github.ref_name }}
+            
+            ### Установка
+            
+```bash
+            # Скачать архив для вашей архитектуры
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/awewe-panel-${{ github.ref_name }}-linux-amd64.tar.gz
+            
+            # Распаковать
+            tar -xzf awewe-panel-${{ github.ref_name }}-linux-amd64.tar.gz
+            cd awewe-panel-${{ github.ref_name }}-linux-amd64
+            
+            # Запустить установщик
+            sudo bash scripts/install.sh
+```
+            
+            ### Архитектуры
+            - `linux-amd64` — стандартные x86_64 серверы
+            - `linux-arm64` — ARM64 серверы (AWS Graviton, Oracle Ampere)
+            - `linux-arm` — Raspberry Pi и подобные устройства
+            - `frontend-only` — только веб-интерфейс для ручного деплоя
+            
+            ### Проверка контрольных сумм
+```bash
+            sha256sum -c checksums.txt
+```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    name: Notify
+    needs: [release]
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+      - name: Notify Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            ✅ Новая версия Awewe Panel ${{ github.ref_name }} опубликована!
+            
+            https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
