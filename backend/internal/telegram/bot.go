@@ -2,38 +2,41 @@ package telegram
 
 import (
 	"encoding/json"
-	"log"
 	"strings"
-	// "github.com/go-telegram-bot-api/telegram-bot-api/v5" // реальный импорт
 )
 
-// BotInstruction определяет структуру JSON-инструкции
-type BotInstruction struct {
-	Trigger   string `json:"trigger"`   // Например: "/start" или "привет"
-	Response  string `json:"response"`  // Текст ответа
-	HasButton bool   `json:"has_button"`
-	ButtonURL string `json:"button_url"`
+// BotCommand описывает одну инструкцию для бота
+type BotCommand struct {
+	Trigger        string          `json:"trigger"`         // Например: "/start" или "оплата"
+	ResponseText   string          `json:"response_text"`   // Текст, который отправит бот
+	InlineButtons  []InlineButton  `json:"inline_buttons"`  // Массив кнопок под сообщением
 }
 
-// ProcessMessage обрабатывает сообщение, сверяясь с JSON-инструкциями
-func ProcessMessage(messageText string, customInstructionsJSON string) string {
-	if customInstructionsJSON == "" {
-		return "Бот настроен. Используйте /start для начала."
+// InlineButton описывает кнопку под сообщением
+type InlineButton struct {
+	Text string `json:"text"` // Текст на кнопке
+	URL  string `json:"url"`  // Ссылка, куда ведет кнопка
+}
+
+// ProcessBotMessage ищет совпадение триггера и возвращает готовый ответ с кнопками
+func ProcessBotMessage(messageText string, instructionsJSON string) (string, []InlineButton) {
+	if instructionsJSON == "" {
+		return "Бот настроен. Используйте /start для начала.", nil
 	}
 
-	var instructions []BotInstruction
-	if err := json.Unmarshal([]byte(customInstructionsJSON), &instructions); err != nil {
-		log.Println("Ошибка парсинга JSON инструкций бота:", err)
-		return "Произошла ошибка в настройках бота."
+	var commands []BotCommand
+	if err := json.Unmarshal([]byte(instructionsJSON), &commands); err != nil {
+		return "Ошибка в формате JSON инструкций. Обратитесь к администратору.", nil
 	}
 
 	messageText = strings.ToLower(strings.TrimSpace(messageText))
 
-	for _, instr := range instructions {
-		if strings.Contains(messageText, strings.ToLower(instr.Trigger)) {
-			return instr.Response // В реальном коде здесь будет отправка сообщения с кнопкой
+	for _, cmd := range commands {
+		// Проверяем точное совпадение или вхождение (для гибкости)
+		if strings.Contains(messageText, strings.ToLower(cmd.Trigger)) {
+			return cmd.ResponseText, cmd.InlineButtons
 		}
 	}
 
-	return "Я не понял команду. Обратитесь к администратору."
+	return "Команда не распознана. Попробуйте /start", nil
 }
