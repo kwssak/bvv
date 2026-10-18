@@ -1,0 +1,21 @@
+[Unit]
+Description=Awewe Panel - VPN Management System
+After=network.target xray.service
+Wants=xray.service
+
+[Service]
+Type=simple
+ExecStart=/opt/awewe/backend/bin/awewe-panel
+WorkingDirectory=/opt/awewe/backend
+Restart=always
+RestartSec=5
+User=root
+Environment="GIN_MODE=release"
+
+# Защита
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/etc/awewe /opt/awewe/data /var/log/awewe
+
+[Install]
+WantedBy=multi-user.target
