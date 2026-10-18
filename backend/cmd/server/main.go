@@ -17,7 +17,7 @@ import (
 func main() {
 	log.Println("[INFO] Запуск Awewe Panel...")
 
-	// 1. Инициализация базы данных (SQLite в защищенной папке data)
+	// 1. Инициализация базы данных
 	os.MkdirAll("./data", 0755)
 	dbPath := "./data/awewe.db"
 	
@@ -26,7 +26,7 @@ func main() {
 		log.Fatalf("[FATAL] Не удалось подключиться к базе данных: %v", err)
 	}
 
-	// Автоматическая миграция: создает таблицы, если их нет, и добавляет новые поля
+	// Автоматическая миграция
 	err = db.AutoMigrate(
 		&database.Client{},
 		&database.Node{},
@@ -38,34 +38,28 @@ func main() {
 	}
 	log.Println("[INFO] База данных инициализирована успешно")
 
-	// 2. Инициализация gRPC клиента для управления ядром Xray
-	// Порт 10085 - стандартный порт gRPC API в конфиге Xray
+	// 2. Инициализация gRPC клиента для Xray
 	xrayManager, err := core.NewXrayManager("127.0.0.1:10085")
 	if err != nil {
-		log.Printf("[WARN] Не удалось подключиться к Xray gRPC (возможно, ядро еще не запущено): %v", err)
+		log.Printf("[WARN] Не удалось подключиться к Xray gRPC: %v", err)
 	} else {
 		defer xrayManager.Close()
 		log.Println("[INFO] Подключение к Xray gRPC установлено")
 	}
 
-	// 3. Настройка роутера Gin
-	// В продакшене используй gin.ReleaseMode
+	// 3. Настройка роутера
 	gin.SetMode(gin.DebugMode)
 	router := gin.Default()
 
-	// --- ПУБЛИЧНЫЕ РОУТЫ (Доступны без авторизации для клиентов) ---
+	// --- ПУБЛИЧНЫЕ РОУТЫ ---
 	public := router.Group("/")
 	{
-		// Юридические страницы (ПК и ПС)
 		public.GET("/pc", api.GetLegalPage(db))
 		public.GET("/ps", api.GetLegalPage(db))
-		
-		// Уникальные ссылки подписки (например, /sub/awewe/emsjjxgshkp-gpsh119)
 		public.GET("/sub/:path", api.HandleSubscription(db))
 	}
 
-	// --- ЗАЩИЩЕННЫЕ РОУТЫ АДМИНКИ (API для фронтенда) ---
-	// В реальном проекте здесь должен быть middleware.RequireAuth()
+	// --- ЗАЩИЩЕННЫЕ РОУТЫ АДМИНКИ ---
 	admin := router.Group("/api")
 	{
 		// Клиенты
@@ -78,21 +72,24 @@ func main() {
 		// Юридические настройки
 		admin.POST("/legal", api.UpdateLegalSettings(db))
 		
-		// Настройки бота (заглушка для примера)
+		// Бэкапы
+		admin.GET("/backups", api.GetBackupList())
+		admin.POST("/backups/restore", api.RestoreFromBackup(db))
+		
+		// Настройки бота
 		admin.POST("/bot/settings", func(c *gin.Context) {
 			c.JSON(200, gin.H{"message": "Настройки бота сохранены"})
 		})
 	}
 
-	// 4. Запуск Telegram бота в отдельной горутине (не блокирует веб-сервер)
-	// Здесь мы передаем конфиг, чтобы бот мог читать CustomInstructions из БД
+	// 4. Запуск Telegram бота
 	go func() {
 		log.Println("[INFO] Запуск Telegram ShopBot...")
-		// telegram.StartBot(db) // Раскомментировать при реализации полной логики бота
+		// telegram.StartBot(db)
 	}()
 
 	// 5. Запуск HTTP сервера
-	port := "2053" // В реальном проекте читается из config.json
+	port := "2053"
 	log.Printf("[INFO] Веб-сервер запущен и слушает порт %s", port)
 	
 	if err := router.Run(":" + port); err != nil {
