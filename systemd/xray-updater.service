@@ -1,0 +1,13 @@
+[Unit]
+Description=Awewe Panel - Xray Core Auto-Updater
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/awewe/scripts/update-xray.sh
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
