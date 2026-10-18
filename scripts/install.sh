@@ -9,63 +9,39 @@ echo -e "${YELLOW}              AWEWE PANEL INSTALLER             ${NC}"
 echo -e "${YELLOW}================================================${NC}"
 
 # 1. Выбор режима установки
-echo -e "${YELLOW}1) Download panel with auto node setup${NC}"
-echo -e "${YELLOW}2) Download panel (manual setup)${NC}"
-echo -e "${YELLOW}3) Back${NC}"
-read -p "Enter your choice: " INSTALL_MODE
-
-if [ -z "$INSTALL_MODE" ]; then
-    echo -e "${YELLOW}Skip? (1)${NC}"
-    read -p "" SKIP
-    if [ -z "$SKIP" ]; then
-        echo -e "${YELLOW}Confirm Y/N${NC}"
-        read -p "Enter your answer: " CONF
-        if [[ "$CONF" != "Y" && "$CONF" != "y" ]]; then 
-            echo "Installation aborted."
-            exit 1
-        fi
-        INSTALL_MODE=1
-    else
-        INSTALL_MODE=1
+while true; do
+    echo -e "${YELLOW}1) Download panel with auto node setup${NC}"
+    echo -e "${YELLOW}2) Download panel (manual setup)${NC}"
+    echo -e "${YELLOW}3) Back${NC}"
+    read -p "Enter your choice [1-3]: " INSTALL_MODE
+    
+    if [[ "$INSTALL_MODE" =~ ^[1-3]$ ]]; then
+        break
     fi
-else
-    echo -e "${YELLOW}Confirm Y/N${NC}"
-    read -p "Enter your answer: " CONF
-    if [[ "$CONF" != "Y" && "$CONF" != "y" ]]; then
-        echo "Installation aborted."
-        exit 1
-    fi
-fi
+    echo -e "${YELLOW}Invalid choice. Please enter 1, 2, or 3.${NC}"
+done
 
 # 2. Выбор домена или IP
-echo -e "${YELLOW}Where to create site?${NC}"
-echo -e "${YELLOW}1) domain (HTTPS)${NC}"
-echo -e "${YELLOW}2) ip (HTTP)${NC}"
-read -p "Enter your choice: " HOST_TYPE
-
-if [ -z "$HOST_TYPE" ]; then
-    HOST_TYPE=2
-    echo -e "${YELLOW}Confirm Y/N (Default: IP)${NC}"
-    read -p "Enter your answer: " CONF
-    if [[ "$CONF" != "Y" && "$CONF" != "y" ]]; then 
-        echo "Installation aborted."
-        exit 1
+while true; do
+    echo -e "${YELLOW}Where to create site?${NC}"
+    echo -e "${YELLOW}1) domain (HTTPS)${NC}"
+    echo -e "${YELLOW}2) ip (HTTP)${NC}"
+    read -p "Enter your choice [1-2]: " HOST_TYPE
+    
+    if [[ "$HOST_TYPE" =~ ^[1-2]$ ]]; then
+        break
     fi
-else
-    echo -e "${YELLOW}Confirm Y/N${NC}"
-    read -p "Enter your answer: " CONF
-    if [[ "$CONF" != "Y" && "$CONF" != "y" ]]; then 
-        echo "Installation aborted."
-        exit 1
-    fi
-fi
+    echo -e "${YELLOW}Invalid choice. Please enter 1 or 2.${NC}"
+done
 
 # 3. Порт
-read -p "Enter port (1024 - 60000): " PANEL_PORT
-if [[ ! "$PANEL_PORT" =~ ^[0-9]+$ ]] || [ "$PANEL_PORT" -lt 1024 ] || [ "$PANEL_PORT" -gt 60000 ]; then
-    PANEL_PORT=2053
-    echo -e "${YELLOW}Invalid port. Using default: 2053${NC}"
-fi
+while true; do
+    read -p "Enter port (1024 - 60000): " PANEL_PORT
+    if [[ "$PANEL_PORT" =~ ^[0-9]+$ ]] && [ "$PANEL_PORT" -ge 1024 ] && [ "$PANEL_PORT" -le 60000 ]; then
+        break
+    fi
+    echo -e "${YELLOW}Invalid port. Please enter a number between 1024 and 60000.${NC}"
+done
 
 # 4. Логика Домен/IP
 SUB_PATH="awewe"
@@ -110,10 +86,6 @@ echo -e "${GREEN}Api token: ${API_TOKEN}${NC}"
 echo -e "${GREEN}________________________________${NC}"
 
 echo -e "${YELLOW}Downloading binaries and setting up systemd services...${NC}"
-
-# Здесь должна быть логика скачивания бинарников и установки
-# Пока выводим заглушку
-echo -e "${YELLOW}Installing Awewe Panel...${NC}"
 
 # Создаём systemd сервис
 cat <<EOF > /etc/systemd/system/awewe-panel.service
