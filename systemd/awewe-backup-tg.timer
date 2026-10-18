@@ -1,0 +1,9 @@
+[Unit]
+Description=Run Telegram Bot Backup Every 6 Hours
+
+[Timer]
+OnCalendar=*:0/6:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
