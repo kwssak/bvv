@@ -20,13 +20,21 @@ if [ -z "$INSTALL_MODE" ]; then
     if [ -z "$SKIP" ]; then
         echo -e "${YELLOW}Confirm Y/N${NC}"
         read -p "Enter your answer: " CONF
-        if [[ "$CONF" != "Y" && "$CONF" != "y" ]]; then exit 1; fi
+        if [[ "$CONF" != "Y" && "$CONF" != "y" ]]; then 
+            echo "Installation aborted."
+            exit 1
+        fi
+        INSTALL_MODE=1
+    else
+        INSTALL_MODE=1
     fi
-    INSTALL_MODE=1
 else
     echo -e "${YELLOW}Confirm Y/N${NC}"
     read -p "Enter your answer: " CONF
-    if [[ "$CONF" != "Y" && "$CONF" != "y" ]]; then exit 1; fi
+    if [[ "$CONF" != "Y" && "$CONF" != "y" ]]; then
+        echo "Installation aborted."
+        exit 1
+    fi
 fi
 
 # 2. Выбор домена или IP
@@ -39,17 +47,24 @@ if [ -z "$HOST_TYPE" ]; then
     HOST_TYPE=2
     echo -e "${YELLOW}Confirm Y/N (Default: IP)${NC}"
     read -p "Enter your answer: " CONF
-    if [[ "$CONF" != "Y" && "$CONF" != "y" ]]; then exit 1; fi
+    if [[ "$CONF" != "Y" && "$CONF" != "y" ]]; then 
+        echo "Installation aborted."
+        exit 1
+    fi
 else
     echo -e "${YELLOW}Confirm Y/N${NC}"
     read -p "Enter your answer: " CONF
-    if [[ "$CONF" != "Y" && "$CONF" != "y" ]]; then exit 1; fi
+    if [[ "$CONF" != "Y" && "$CONF" != "y" ]]; then 
+        echo "Installation aborted."
+        exit 1
+    fi
 fi
 
 # 3. Порт
 read -p "Enter port (1024 - 60000): " PANEL_PORT
 if [[ ! "$PANEL_PORT" =~ ^[0-9]+$ ]] || [ "$PANEL_PORT" -lt 1024 ] || [ "$PANEL_PORT" -gt 60000 ]; then
     PANEL_PORT=2053
+    echo -e "${YELLOW}Invalid port. Using default: 2053${NC}"
 fi
 
 # 4. Логика Домен/IP
@@ -58,7 +73,6 @@ if [ "$HOST_TYPE" == "1" ]; then
     read -p "Enter your domain (e.g., sub.yourdomain.ru): " HOST_ADDRESS
     PROTOCOL="https"
     echo -e "${YELLOW}Configuring Let's Encrypt SSL for ${HOST_ADDRESS}...${NC}"
-    # Здесь будет вызов acme.sh или certbot
 else
     HOST_ADDRESS=$(curl -s https://api.ipify.org)
     PROTOCOL="http"
@@ -70,8 +84,10 @@ WEB_PATH=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 16 | head -n 1)
 API_TOKEN=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 32 | head -n 1)
 ADMIN_PASS=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 12 | head -n 1)
 
-# Сохранение конфига для backend
+# Создаём директорию
 mkdir -p /etc/awewe
+
+# Сохранение конфига для backend
 cat <<EOF > /etc/awewe/config.json
 {
   "port": "${PANEL_PORT}",
@@ -94,5 +110,32 @@ echo -e "${GREEN}Api token: ${API_TOKEN}${NC}"
 echo -e "${GREEN}________________________________${NC}"
 
 echo -e "${YELLOW}Downloading binaries and setting up systemd services...${NC}"
-# wget -O /usr/local/bin/awewe-panel https://github.com/.../awewe-panel
-# systemctl enable --now awewe-panel
+
+# Здесь должна быть логика скачивания бинарников и установки
+# Пока выводим заглушку
+echo -e "${YELLOW}Installing Awewe Panel...${NC}"
+
+# Создаём systemd сервис
+cat <<EOF > /etc/systemd/system/awewe-panel.service
+[Unit]
+Description=Awewe Panel - VPN Management System
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/awewe/backend/bin/awewe-panel
+WorkingDirectory=/opt/awewe/backend
+Restart=always
+RestartSec=5
+User=root
+Environment="GIN_MODE=release"
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable awewe-panel
+
+echo -e "${GREEN}Installation complete!${NC}"
+echo -e "${YELLOW}To start the panel run: systemctl start awewe-panel${NC}"
